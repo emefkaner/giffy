@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Giffy – Video zu GIF</title>
+<style>
+  :root {
+    --bg: #12141a;
+    --panel: #1c1f28;
+    --panel-2: #242836;
+    --border: #343a4d;
+    --text: #e8eaf2;
+    --muted: #9aa1b5;
+    --accent: #7c5cff;
+    --accent-2: #00d4a6;
+    --danger: #ff5c7a;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 2rem 1rem 4rem;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 2rem; }
+  header h1 {
+    font-size: 2.2rem;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    display: inline-block;
+  }
+  header p { color: var(--muted); margin-top: .4rem; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.4rem;
+    margin-bottom: 1.2rem;
+  }
+  /* Dropzone */
+  #dropzone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 3rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+  }
+  #dropzone.dragover { border-color: var(--accent); background: rgba(124, 92, 255, .08); }
+  #dropzone .icon { font-size: 2.6rem; display: block; margin-bottom: .6rem; }
+  #dropzone strong { color: var(--accent-2); }
+  #dropzone small { display: block; margin-top: .5rem; color: var(--muted); }
+  /* Video + Einstellungen */
+  video { width: 100%; border-radius: 10px; background: #000; max-height: 420px; }
+  .filemeta { color: var(--muted); font-size: .85rem; margin-top: .5rem; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-top: 1.2rem;
+  }
+  .field label { display: block; font-size: .82rem; color: var(--muted); margin-bottom: .35rem; }
+  .field .val { color: var(--accent-2); font-weight: 600; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  input[type=number], select {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: .5rem .6rem;
+    font-size: .95rem;
+  }
+  .checkline { display: flex; align-items: center; gap: .5rem; margin-top: 1.6rem; }
+  .checkline input { accent-color: var(--accent); width: 1.05rem; height: 1.05rem; }
+  .hint { font-size: .8rem; color: var(--muted); margin-top: .8rem; }
+  .hint.warn { color: var(--danger); }
+  /* Buttons */
+  .btn {
+    display: inline-block;
+    border: none;
+    border-radius: 10px;
+    padding: .8rem 1.6rem;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: #fff;
+    background: linear-gradient(90deg, var(--accent), #a95cff);
+    transition: filter .15s, opacity .15s;
+  }
+  .btn:hover:not(:disabled) { filter: brightness(1.15); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn.secondary { background: var(--panel-2); border: 1px solid var(--border); }
+  .btn.green { background: linear-gradient(90deg, #00b894, var(--accent-2)); color: #06281f; }
+  .actions { display: flex; gap: .8rem; flex-wrap: wrap; margin-top: 1.4rem; }
+  /* Fortschritt */
+  #progressWrap { display: none; margin-top: 1.2rem; }
+  .bar { height: 10px; background: var(--panel-2); border-radius: 6px; overflow: hidden; }
+  .bar > div {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    transition: width .15s;
+  }
+  #progressLabel { font-size: .85rem; color: var(--muted); margin-top: .4rem; }
+  /* Ergebnis */
+  #result { display: none; text-align: center; }
+  #result img {
+    max-width: 100%;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: #000;
+  }
+  #resultMeta { color: var(--muted); font-size: .9rem; margin: .8rem 0 1rem; }
+  .hidden { display: none !important; }
+  footer { text-align: center; color: var(--muted); font-size: .8rem; margin-top: 2rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🎞️ Giffy</h1>
+    <p>Video rein, GIF raus – alles lokal in deinem Browser, nichts wird hochgeladen.</p>
+  </header>
+
+  <div class="card">
+    <div id="dropzone" tabindex="0" role="button" aria-label="Video auswählen">
+      <span class="icon">📥</span>
+      Video hierher ziehen oder <strong>klicken zum Auswählen</strong>
+      <small>MP4, WebM, MOV … alles, was dein Browser abspielen kann</small>
+    </div>
+    <input type="file" id="fileInput" accept="video/*" class="hidden">
+  </div>
+
+  <div class="card hidden" id="editor">
+    <video id="video" controls muted playsinline></video>
+    <div class="filemeta" id="fileMeta"></div>
+
+    <div class="grid">
+      <div class="field">
+        <label>Start: <span class="val" id="startVal">0,0 s</span></label>
+        <input type="range" id="startRange" min="0" max="0" step="0.1" value="0">
+      </div>
+      <div class="field">
+        <label>Ende: <span class="val" id="endVal">0,0 s</span></label>
+        <input type="range" id="endRange" min="0" max="0" step="0.1" value="0">
+      </div>
+      <div class="field">
+        <label>Bilder pro Sekunde (FPS)</label>
+        <select id="fps">
+          <option value="5">5</option>
+          <option value="8">8</option>
+          <option value="10" selected>10</option>
+          <option value="12">12</option>
+          <option value="15">15</option>
+          <option value="20">20</option>
+          <option value="25">25</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Breite (px, Höhe automatisch)</label>
+        <input type="number" id="width" min="32" max="1280" step="2" value="480">
+      </div>
+      <div class="field checkline">
+        <input type="checkbox" id="dither" checked>
+        <label for="dither" style="margin:0; color: var(--text);">Dithering (bessere Farbverläufe)</label>
+      </div>
+      <div class="field checkline">
+        <input type="checkbox" id="loop" checked>
+        <label for="loop" style="margin:0; color: var(--text);">Endlos-Schleife</label>
+      </div>
+    </div>
+
+    <p class="hint" id="frameEstimate"></p>
+
+    <div class="actions">
+      <button class="btn" id="convertBtn">✨ In GIF umwandeln</button>
+      <button class="btn secondary" id="cancelBtn" style="display:none;">Abbrechen</button>
+      <button class="btn secondary" id="resetBtn">Anderes Video</button>
+    </div>
+
+    <div id="progressWrap">
+      <div class="bar"><div id="progressBar"></div></div>
+      <div id="progressLabel"></div>
+    </div>
+  </div>
+
+  <div class="card" id="result">
+    <h2 style="margin-bottom:1rem;">Dein GIF 🎉</h2>
+    <img id="gifPreview" alt="Erzeugtes GIF">
+    <div id="resultMeta"></div>
+    <a class="btn green" id="downloadBtn" download="giffy.gif">⬇️ GIF herunterladen</a>
+  </div>
+
+  <footer>Giffy · 100 % clientseitig · keine Server, keine Uploads</footer>
+</div>
+
+<script>
+/* ==========================================================================
+ * GIF-Encoder (GIF89a) – reines JavaScript, keine Abhängigkeiten.
+ * Pro Frame: Median-Cut-Quantisierung auf max. 256 Farben (lokale Farbtabelle),
+ * optional Floyd-Steinberg-Dithering, dann LZW-Kompression.
+ * Läuft auch ohne DOM (für Tests unter Node).
+ * ========================================================================== */
+const GifEncoder = (() => {
+
+  /* ---- Median-Cut-Quantisierung -> Palette mit maxColors Farben ---- */
+  function buildPalette(rgba, maxColors) {
+    // Pixel unterabtasten, damit der Palettenaufbau auch bei großen Frames schnell bleibt
+    const totalPx = rgba.length >> 2;
+    const step = Math.max(1, Math.floor(totalPx / 65536));
+    const pixels = [];
+    for (let i = 0; i < totalPx; i += step) {
+      const o = i << 2;
+      pixels.push([rgba[o], rgba[o + 1], rgba[o + 2]]);
+    }
+
+    let boxes = [pixels];
+    while (boxes.length < maxColors) {
+      // Box mit größter Spannweite suchen
+      let bestIdx = -1, bestRange = -1, bestChan = 0;
+      for (let b = 0; b < boxes.length; b++) {
+        const box = boxes[b];
+        if (box.length < 2) continue;
+        for (let c = 0; c < 3; c++) {
+          let mn = 255, mx = 0;
+          for (let p = 0; p < box.length; p++) {
+            const v = box[p][c];
+            if (v < mn) mn = v;
+            if (v > mx) mx = v;
+          }
+          const range = mx - mn;
+          if (range > bestRange) { bestRange = range; bestIdx = b; bestChan = c; }
+        }
+      }
+      if (bestIdx < 0 || bestRange === 0) break;
+      const box = boxes[bestIdx];
+      box.sort((a, b) => a[bestChan] - b[bestChan]);
+      const mid = box.length >> 1;
+      boxes.splice(bestIdx, 1, box.slice(0, mid), box.slice(mid));
+    }
+
+    // Durchschnittsfarbe pro Box
+    const palette = boxes.map(box => {
+      let r = 0, g = 0, b = 0;
+      for (let p = 0; p < box.length; p++) { r += box[p][0]; g += box[p][1]; b += box[p][2]; }
+      const n = box.length || 1;
+      return [Math.round(r / n), Math.round(g / n), Math.round(b / n)];
+    });
+    while (palette.length < 2) palette.push([0, 0, 0]);
+    return palette;
+  }
+
+  function nearestIndex(palette, cache, r, g, b) {
+    const key = (r << 16) | (g << 8) | b;
+    const hit = cache.get(key);
+    if (hit !== undefined) return hit;
+    let best = 0, bestDist = Infinity;
+    for (let i = 0; i < palette.length; i++) {
+      const p = palette[i];
+      const dr = r - p[0], dg = g - p[1], db = b - p[2];
+      const d = dr * dr + dg * dg + db * db;
+      if (d < bestDist) { bestDist = d; best = i; }
+    }
+    cache.set(key, best);
+    return best;
+  }
+
+  const clamp8 = v => v < 0 ? 0 : v > 255 ? 255 : v;
+
+  /* ---- RGBA-Frame -> Palettenindizes (optional mit Floyd-Steinberg) ---- */
+  function indexFrame(rgba, width, height, palette, dither) {
+    const indices = new Uint8Array(width * height);
+    const cache = new Map();
+    if (!dither) {
+      for (let i = 0; i < indices.length; i++) {
+        const o = i << 2;
+        indices[i] = nearestIndex(palette, cache, rgba[o], rgba[o + 1], rgba[o + 2]);
+      }
+      return indices;
+    }
+    // Fehlerdiffusion auf einer Float-Kopie
+    const buf = new Float32Array(width * height * 3);
+    for (let i = 0; i < width * height; i++) {
+      const o = i << 2, t = i * 3;
+      buf[t] = rgba[o]; buf[t + 1] = rgba[o + 1]; buf[t + 2] = rgba[o + 2];
+    }
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = y * width + x, t = i * 3;
+        const r = clamp8(Math.round(buf[t])),
+              g = clamp8(Math.round(buf[t + 1])),
+              b = clamp8(Math.round(buf[t + 2]));
+        const idx = nearestIndex(palette, cache, r, g, b);
+        indices[i] = idx;
+        const p = palette[idx];
+        const er = r - p[0], eg = g - p[1], eb = b - p[2];
+        // Floyd-Steinberg: 7/16 rechts, 3/16 unten links, 5/16 unten, 1/16 unten rechts
+        if (x + 1 < width) {
+          const n = t + 3;
+          buf[n] += er * 7 / 16; buf[n + 1] += eg * 7 / 16; buf[n + 2] += eb * 7 / 16;
+        }
+        if (y + 1 < height) {
+          const rowBelow = t + width * 3;
+          if (x > 0) {
+            const n = rowBelow - 3;
+            buf[n] += er * 3 / 16; buf[n + 1] += eg * 3 / 16; buf[n + 2] += eb * 3 / 16;
+          }
+          buf[rowBelow] += er * 5 / 16; buf[rowBelow + 1] += eg * 5 / 16; buf[rowBelow + 2] += eb * 5 / 16;
+          if (x + 1 < width) {
+            const n = rowBelow + 3;
+            buf[n] += er * 1 / 16; buf[n + 1] += eg * 1 / 16; buf[n + 2] += eb * 1 / 16;
+          }
+        }
+      }
+    }
+    return indices;
+  }
+
+  /* ---- LZW-Kompression (GIF-Variante mit variabler Codelänge) ---- */
+  function lzwEncode(indices, minCodeSize, out) {
+    const clearCode = 1 << minCodeSize;
+    const eoiCode = clearCode + 1;
+
+    let codeSize = minCodeSize + 1;
+    let dict = new Map();
+    let nextCode = eoiCode + 1;
+
+    let bitBuf = 0, bitCnt = 0;
+    const chunk = new Uint8Array(255);
+    let chunkLen = 0;
+
+    const flushChunk = () => {
+      if (chunkLen > 0) {
+        out.push(chunkLen);
+        for (let i = 0; i < chunkLen; i++) out.push(chunk[i]);
+        chunkLen = 0;
+      }
+    };
+    const emit = code => {
+      bitBuf |= code << bitCnt;
+      bitCnt += codeSize;
+      while (bitCnt >= 8) {
+        chunk[chunkLen++] = bitBuf & 0xff;
+        if (chunkLen === 255) flushChunk();
+        bitBuf >>= 8;
+        bitCnt -= 8;
+      }
+    };
+    const resetDict = () => {
+      dict = new Map();
+      nextCode = eoiCode + 1;
+      codeSize = minCodeSize + 1;
+    };
+
+    emit(clearCode);
+    let prefix = indices[0];
+    for (let i = 1; i < indices.length; i++) {
+      const k = indices[i];
+      const key = (prefix << 8) | k;
+      const found = dict.get(key);
+      if (found !== undefined) {
+        prefix = found;
+      } else {
+        emit(prefix);
+        dict.set(key, nextCode++);
+        if (nextCode === (1 << codeSize) + 1) {
+          if (codeSize < 12) {
+            codeSize++;
+          } else {
+            emit(clearCode);
+            resetDict();
+          }
+        }
+        prefix = k;
+      }
+    }
+    emit(prefix);
+    emit(eoiCode);
+    if (bitCnt > 0) {
+      chunk[chunkLen++] = bitBuf & 0xff;
+      if (chunkLen === 255) flushChunk();
+    }
+    flushChunk();
+    out.push(0); // Block-Terminator
+  }
+
+  /* ---- Encoder-Objekt: Frames sammeln, dann GIF-Bytes bauen ---- */
+  function create(width, height, opts = {}) {
+    const delayCs = Math.max(2, Math.round(100 / (opts.fps || 10))); // in 1/100 s
+    const loop = opts.loop !== false;
+    const dither = opts.dither !== false;
+    const maxColors = Math.min(256, Math.max(2, opts.maxColors || 256));
+    const out = [];
+
+    const writeShort = v => { out.push(v & 0xff, (v >> 8) & 0xff); };
+
+    // Header + Logical Screen Descriptor (ohne globale Farbtabelle)
+    out.push(0x47, 0x49, 0x46, 0x38, 0x39, 0x61); // "GIF89a"
+    writeShort(width);
+    writeShort(height);
+    out.push(0x00, 0x00, 0x00);
+
+    if (loop) {
+      // NETSCAPE2.0-Extension: Endlos-Schleife
+      out.push(0x21, 0xff, 0x0b,
+        0x4e, 0x45, 0x54, 0x53, 0x43, 0x41, 0x50, 0x45, 0x32, 0x2e, 0x30,
+        0x03, 0x01, 0x00, 0x00, 0x00);
+    }
+
+    return {
+      addFrame(rgba) {
+        const palette = buildPalette(rgba, maxColors);
+        const indices = indexFrame(rgba, width, height, palette, dither);
+
+        // Palettengröße auf Zweierpotenz (min. 2 Bit) auffüllen
+        let bits = 1;
+        while ((1 << bits) < palette.length) bits++;
+        if (bits < 2) bits = 2;
+        const tableSize = 1 << bits;
+
+        // Graphic Control Extension
+        out.push(0x21, 0xf9, 0x04, 0x04);
+        writeShort(delayCs);
+        out.push(0x00, 0x00);
+
+        // Image Descriptor mit lokaler Farbtabelle
+        out.push(0x2c);
+        writeShort(0); writeShort(0);
+        writeShort(width); writeShort(height);
+        out.push(0x80 | (bits - 1));
+        for (let i = 0; i < tableSize; i++) {
+          const p = palette[i] || [0, 0, 0];
+          out.push(p[0], p[1], p[2]);
+        }
+
+        const minCodeSize = Math.max(2, bits);
+        out.push(minCodeSize);
+        lzwEncode(indices, minCodeSize, out);
+      },
+      finish() {
+        out.push(0x3b); // Trailer
+        return new Uint8Array(out);
+      }
+    };
+  }
+
+  return { create, buildPalette, indexFrame, lzwEncode };
+})();
+
+if (typeof module !== 'undefined' && module.exports) module.exports = GifEncoder;
+</script>
+
+<script>
+/* ==========================================================================
+ * UI-Logik: Video laden, Frames per Seek erfassen, kodieren, Ergebnis zeigen
+ * ========================================================================== */
+(() => {
+  const $ = id => document.getElementById(id);
+  const dropzone = $('dropzone'), fileInput = $('fileInput'),
+        editor = $('editor'), video = $('video'), fileMeta = $('fileMeta'),
+        startRange = $('startRange'), endRange = $('endRange'),
+        startVal = $('startVal'), endVal = $('endVal'),
+        fpsSel = $('fps'), widthInput = $('width'),
+        ditherChk = $('dither'), loopChk = $('loop'),
+        frameEstimate = $('frameEstimate'),
+        convertBtn = $('convertBtn'), cancelBtn = $('cancelBtn'), resetBtn = $('resetBtn'),
+        progressWrap = $('progressWrap'), progressBar = $('progressBar'), progressLabel = $('progressLabel'),
+        result = $('result'), gifPreview = $('gifPreview'),
+        resultMeta = $('resultMeta'), downloadBtn = $('downloadBtn');
+
+  let objectUrl = null, gifUrl = null, cancelled = false, converting = false;
+
+  const fmtSec = s => s.toFixed(1).replace('.', ',') + ' s';
+  const fmtBytes = b => b < 1024 * 1024
+    ? (b / 1024).toFixed(0) + ' KB'
+    : (b / (1024 * 1024)).toFixed(2) + ' MB';
+
+  /* ---- Datei laden ---- */
+  dropzone.addEventListener('click', () => fileInput.click());
+  dropzone.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+  });
+  dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+  dropzone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropzone.classList.remove('dragover');
+    const f = e.dataTransfer.files[0];
+    if (f) loadFile(f);
+  });
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) loadFile(fileInput.files[0]);
+  });
+
+  function loadFile(file) {
+    if (!file.type.startsWith('video/') && !/\.(mp4|webm|mov|m4v|ogv|mkv)$/i.test(file.name)) {
+      alert('Bitte eine Videodatei auswählen.');
+      return;
+    }
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl = URL.createObjectURL(file);
+    video.src = objectUrl;
+    video.addEventListener('loadedmetadata', () => {
+      const dur = video.duration;
+      startRange.max = endRange.max = dur.toFixed(1);
+      startRange.value = 0;
+      // Standardmäßig max. 8 s, damit das erste GIF nicht riesig wird
+      endRange.value = Math.min(dur, 8).toFixed(1);
+      widthInput.value = Math.min(480, video.videoWidth || 480);
+      fileMeta.textContent =
+        `${file.name} · ${fmtBytes(file.size)} · ${video.videoWidth}×${video.videoHeight} px · ${fmtSec(dur)}`;
+      editor.classList.remove('hidden');
+      result.style.display = 'none';
+      updateLabels();
+    }, { once: true });
+    video.addEventListener('error', () => {
+      alert('Dieses Video kann dein Browser leider nicht dekodieren.');
+    }, { once: true });
+  }
+
+  /* ---- Einstellungen ---- */
+  function updateLabels() {
+    let s = parseFloat(startRange.value), e = parseFloat(endRange.value);
+    if (e <= s) { e = Math.min(parseFloat(endRange.max), s + 0.1); endRange.value = e; }
+    startVal.textContent = fmtSec(s);
+    endVal.textContent = fmtSec(e);
+    const frames = Math.max(1, Math.ceil((e - s) * parseInt(fpsSel.value, 10)));
+    frameEstimate.textContent = `≈ ${frames} Frames werden erzeugt.`;
+    frameEstimate.className = frames > 300 ? 'hint warn' : 'hint';
+    if (frames > 300) frameEstimate.textContent += ' Das dauert und ergibt eine große Datei – kürzerer Ausschnitt oder weniger FPS empfohlen.';
+  }
+  startRange.addEventListener('input', () => { updateLabels(); video.currentTime = parseFloat(startRange.value); });
+  endRange.addEventListener('input', () => { updateLabels(); video.currentTime = parseFloat(endRange.value); });
+  fpsSel.addEventListener('change', updateLabels);
+
+  resetBtn.addEventListener('click', () => {
+    if (converting) return;
+    editor.classList.add('hidden');
+    result.style.display = 'none';
+    fileInput.value = '';
+    video.removeAttribute('src');
+    video.load();
+  });
+
+  cancelBtn.addEventListener('click', () => { cancelled = true; });
+
+  /* ---- Frame an Zeitpunkt t erfassen (Seek + warten) ---- */
+  function seekTo(t) {
+    return new Promise((resolve, reject) => {
+      const onSeeked = () => { cleanup(); resolve(); };
+      const onError = () => { cleanup(); reject(new Error('Seek fehlgeschlagen')); };
+      const cleanup = () => {
+        video.removeEventListener('seeked', onSeeked);
+        video.removeEventListener('error', onError);
+      };
+      video.addEventListener('seeked', onSeeked);
+      video.addEventListener('error', onError);
+      video.currentTime = t;
+    });
+  }
+
+  /* ---- Konvertierung ---- */
+  convertBtn.addEventListener('click', async () => {
+    if (converting) return;
+    converting = true;
+    cancelled = false;
+    convertBtn.disabled = true;
+    cancelBtn.style.display = 'inline-block';
+    resetBtn.disabled = true;
+    result.style.display = 'none';
+    progressWrap.style.display = 'block';
+
+    try {
+      video.pause();
+      const start = parseFloat(startRange.value);
+      const end = parseFloat(endRange.value);
+      const fps = parseInt(fpsSel.value, 10);
+      const targetW = Math.max(32, Math.min(1280, parseInt(widthInput.value, 10) || 480));
+
+      const scale = targetW / video.videoWidth;
+      const w = targetW & ~1;
+      const h = Math.max(2, Math.round(video.videoHeight * scale)) & ~1;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+      const frameCount = Math.max(1, Math.ceil((end - start) * fps));
+      const enc = GifEncoder.create(w, h, {
+        fps,
+        loop: loopChk.checked,
+        dither: ditherChk.checked
+      });
+
+      for (let i = 0; i < frameCount; i++) {
+        if (cancelled) throw new Error('cancelled');
+        const t = Math.min(start + i / fps, Math.max(0, video.duration - 0.001));
+        await seekTo(t);
+        ctx.drawImage(video, 0, 0, w, h);
+        const rgba = ctx.getImageData(0, 0, w, h).data;
+        enc.addFrame(rgba);
+        const pct = Math.round(((i + 1) / frameCount) * 100);
+        progressBar.style.width = pct + '%';
+        progressLabel.textContent = `Frame ${i + 1} / ${frameCount} (${pct} %)`;
+        // UI atmen lassen
+        await new Promise(r => setTimeout(r, 0));
+      }
+
+      progressLabel.textContent = 'GIF wird zusammengebaut …';
+      await new Promise(r => setTimeout(r, 0));
+      const bytes = enc.finish();
+      const blob = new Blob([bytes], { type: 'image/gif' });
+
+      if (gifUrl) URL.revokeObjectURL(gifUrl);
+      gifUrl = URL.createObjectURL(blob);
+      gifPreview.src = gifUrl;
+      downloadBtn.href = gifUrl;
+      resultMeta.textContent =
+        `${w}×${h} px · ${frameCount} Frames · ${fps} FPS · ${fmtBytes(blob.size)}`;
+      result.style.display = 'block';
+      result.scrollIntoView({ behavior: 'smooth' });
+    } catch (err) {
+      if (err.message !== 'cancelled') {
+        console.error(err);
+        alert('Konvertierung fehlgeschlagen: ' + err.message);
+      }
+    } finally {
+      converting = false;
+      convertBtn.disabled = false;
+      cancelBtn.style.display = 'none';
+      resetBtn.disabled = false;
+      progressWrap.style.display = 'none';
+      progressBar.style.width = '0%';
+    }
+  });
+})();
+</script>
+</body>
+</html>

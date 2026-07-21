@@ -1,0 +1,36 @@
+# 🎞️ Giffy – Video zu GIF im Browser
+
+Eine One-Page-HTML-App, die Videos direkt im Browser in animierte GIFs umwandelt.
+**Komplett clientseitig** – keine Server, keine Uploads, keine externen Bibliotheken.
+
+## Benutzung
+
+Einfach `index.html` im Browser öffnen (Doppelklick genügt, kein Webserver nötig):
+
+1. Video per Drag & Drop oder Klick auswählen (MP4, WebM, MOV … alles, was der Browser abspielen kann)
+2. Ausschnitt (Start/Ende), FPS, Breite, Dithering und Endlos-Schleife einstellen
+3. „✨ In GIF umwandeln“ klicken
+4. GIF ansehen und herunterladen
+
+## Wie es funktioniert
+
+- Frames werden per `<video>`-Seek auf ein Canvas gezeichnet und als RGBA-Daten ausgelesen
+- Ein eingebetteter GIF89a-Encoder (reines JavaScript) übernimmt die Kodierung:
+  - **Median-Cut-Quantisierung** auf max. 256 Farben pro Frame (lokale Farbtabellen)
+  - optional **Floyd-Steinberg-Dithering** für weichere Farbverläufe
+  - **LZW-Kompression** mit variabler Codelänge inkl. 12-Bit-Wörterbuch-Reset
+  - NETSCAPE2.0-Extension für die Endlos-Schleife
+
+## Tests
+
+Der Encoder lässt sich ohne Browser testen (kodiert synthetische Frames und
+dekodiert sie mit einem strikten Referenz-Decoder zurück):
+
+```bash
+node test/test-encoder.js
+```
+
+## Tipps
+
+- GIFs werden schnell groß: kurze Ausschnitte (≤ 8 s), 10–15 FPS und ≤ 480 px Breite liefern die besten Ergebnisse
+- Bei flächigen Motiven (Screencasts, Cartoons) Dithering ausschalten – das spart deutlich Dateigröße
