@@ -1,6 +1,6 @@
-# 🎞️ Giffy – Video zu GIF im Browser
+# LIDL GIFFY – Video zu GIF im Browser
 
-Eine One-Page-HTML-App, die Videos direkt im Browser in animierte GIFs umwandelt.
+Eine One-Page-HTML-App im Lidl-Design (Look & Feel wie MCO Now Konverter und InStore Communication Converter), die Videos direkt im Browser in animierte GIFs umwandelt.
 **Komplett clientseitig** – keine Server, keine Uploads, keine externen Bibliotheken.
 
 ## Benutzung
