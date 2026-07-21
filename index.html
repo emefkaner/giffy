@@ -79,6 +79,10 @@
   }
   .checkline { display: flex; align-items: center; gap: .5rem; margin-top: 1.6rem; }
   .checkline input { accent-color: var(--accent); width: 1.05rem; height: 1.05rem; }
+  .modes { display: flex; gap: 1.4rem; flex-wrap: wrap; }
+  .mode { display: flex; align-items: center; gap: .45rem; cursor: pointer; font-size: .95rem; }
+  .mode input { accent-color: var(--accent); width: 1.05rem; height: 1.05rem; }
+  .field.off { opacity: .35; pointer-events: none; }
   .hint { font-size: .8rem; color: var(--muted); margin-top: .8rem; }
   .hint.warn { color: var(--danger); }
   /* Buttons */
@@ -174,6 +178,21 @@
       <div class="field checkline">
         <input type="checkbox" id="loop" checked>
         <label for="loop" style="margin:0; color: var(--text);">Endlos-Schleife</label>
+      </div>
+      <div class="field" style="grid-column: 1 / -1;">
+        <label>Modus</label>
+        <div class="modes">
+          <label class="mode"><input type="radio" name="mode" id="modeQuality" checked> Qualität vorgeben</label>
+          <label class="mode"><input type="radio" name="mode" id="modeSize"> Dateigröße begrenzen</label>
+        </div>
+      </div>
+      <div class="field" id="qualityField">
+        <label>Qualität: <span class="val" id="qualityVal">100 %</span></label>
+        <input type="range" id="quality" min="10" max="100" step="5" value="100">
+      </div>
+      <div class="field off" id="sizeField">
+        <label>Max. Dateigröße: <span class="val" id="sizeVal">2,0 MB</span></label>
+        <input type="range" id="sizeRange" min="0" max="100" step="1" value="65">
       </div>
     </div>
 
@@ -469,6 +488,10 @@ if (typeof module !== 'undefined' && module.exports) module.exports = GifEncoder
         startVal = $('startVal'), endVal = $('endVal'),
         fpsSel = $('fps'), widthInput = $('width'),
         ditherChk = $('dither'), loopChk = $('loop'),
+        modeQuality = $('modeQuality'), modeSize = $('modeSize'),
+        qualityField = $('qualityField'), sizeField = $('sizeField'),
+        qualityRange = $('quality'), qualityVal = $('qualityVal'),
+        sizeRange = $('sizeRange'), sizeVal = $('sizeVal'),
         frameEstimate = $('frameEstimate'),
         convertBtn = $('convertBtn'), cancelBtn = $('cancelBtn'), resetBtn = $('resetBtn'),
         progressWrap = $('progressWrap'), progressBar = $('progressBar'), progressLabel = $('progressLabel'),
@@ -480,7 +503,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = GifEncoder
   const fmtSec = s => s.toFixed(1).replace('.', ',') + ' s';
   const fmtBytes = b => b < 1024 * 1024
     ? (b / 1024).toFixed(0) + ' KB'
-    : (b / (1024 * 1024)).toFixed(2) + ' MB';
+    : (b / (1024 * 1024)).toFixed(2).replace('.', ',') + ' MB';
 
   /* ---- Datei laden ---- */
   dropzone.addEventListener('click', () => fileInput.click());
@@ -540,6 +563,28 @@ if (typeof module !== 'undefined' && module.exports) module.exports = GifEncoder
   endRange.addEventListener('input', () => { updateLabels(); video.currentTime = parseFloat(endRange.value); });
   fpsSel.addEventListener('change', updateLabels);
 
+  /* ---- Qualität & Zielgröße ---- */
+  // Qualität (10–100 %) -> Farbanzahl pro Frame (4–256, nichtlinear für mehr Wirkung unten)
+  const qualityToColors = q => Math.max(4, Math.round(256 * Math.pow(q / 100, 1.5)));
+  // Zielgröße: logarithmischer Slider 0–100 -> 0,1–10 MB
+  const sizeSliderToBytes = v => Math.round(0.1 * Math.pow(10, v / 50) * 1024 * 1024);
+
+  function updateModeUI() {
+    qualityField.classList.toggle('off', !modeQuality.checked);
+    sizeField.classList.toggle('off', !modeSize.checked);
+  }
+  modeQuality.addEventListener('change', updateModeUI);
+  modeSize.addEventListener('change', updateModeUI);
+  qualityRange.addEventListener('input', () => {
+    qualityVal.textContent = `${qualityRange.value} % (${qualityToColors(+qualityRange.value)} Farben)`;
+  });
+  sizeRange.addEventListener('input', () => {
+    sizeVal.textContent = fmtBytes(sizeSliderToBytes(+sizeRange.value));
+  });
+  qualityRange.dispatchEvent(new Event('input'));
+  sizeRange.dispatchEvent(new Event('input'));
+  updateModeUI();
+
   resetBtn.addEventListener('click', () => {
     if (converting) return;
     editor.classList.add('hidden');
@@ -566,6 +611,39 @@ if (typeof module !== 'undefined' && module.exports) module.exports = GifEncoder
     });
   }
 
+  /* ---- Kodieren: gespeicherte Frames -> GIF-Bytes, optional herunterskaliert ---- */
+  const uiBreath = () => new Promise(r => setTimeout(r, 0));
+
+  async function encodeGif(frames, sw, sh, dw, dh, opts, label) {
+    const enc = GifEncoder.create(dw, dh, opts);
+    let sctx = null, dctx = null;
+    const needScale = dw !== sw || dh !== sh;
+    if (needScale) {
+      const src = document.createElement('canvas');
+      src.width = sw; src.height = sh;
+      sctx = src.getContext('2d');
+      const dst = document.createElement('canvas');
+      dst.width = dw; dst.height = dh;
+      dctx = dst.getContext('2d', { willReadFrequently: true });
+      dctx.imageSmoothingQuality = 'high';
+    }
+    for (let i = 0; i < frames.length; i++) {
+      if (cancelled) throw new Error('cancelled');
+      let rgba = frames[i];
+      if (needScale) {
+        sctx.putImageData(new ImageData(frames[i], sw, sh), 0, 0);
+        dctx.drawImage(sctx.canvas, 0, 0, dw, dh);
+        rgba = dctx.getImageData(0, 0, dw, dh).data;
+      }
+      enc.addFrame(rgba);
+      const pct = Math.round(((i + 1) / frames.length) * 100);
+      progressBar.style.width = pct + '%';
+      progressLabel.textContent = `${label} · Frame ${i + 1} / ${frames.length} (${pct} %)`;
+      await uiBreath();
+    }
+    return enc.finish();
+  }
+
   /* ---- Konvertierung ---- */
   convertBtn.addEventListener('click', async () => {
     if (converting) return;
@@ -587,36 +665,68 @@ if (typeof module !== 'undefined' && module.exports) module.exports = GifEncoder
       const scale = targetW / video.videoWidth;
       const w = targetW & ~1;
       const h = Math.max(2, Math.round(video.videoHeight * scale)) & ~1;
+      const frameCount = Math.max(1, Math.ceil((end - start) * fps));
 
+      if (w * h * 4 * frameCount > 800 * 1024 * 1024) {
+        throw new Error('Zu viele/zu große Frames für den Arbeitsspeicher – bitte Ausschnitt kürzen, FPS oder Breite reduzieren.');
+      }
+
+      // Phase 1: alle Frames einmal erfassen (bleiben für weitere Kodierversuche im Speicher)
       const canvas = document.createElement('canvas');
       canvas.width = w;
       canvas.height = h;
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
-
-      const frameCount = Math.max(1, Math.ceil((end - start) * fps));
-      const enc = GifEncoder.create(w, h, {
-        fps,
-        loop: loopChk.checked,
-        dither: ditherChk.checked
-      });
-
+      const frames = [];
       for (let i = 0; i < frameCount; i++) {
         if (cancelled) throw new Error('cancelled');
         const t = Math.min(start + i / fps, Math.max(0, video.duration - 0.001));
         await seekTo(t);
         ctx.drawImage(video, 0, 0, w, h);
-        const rgba = ctx.getImageData(0, 0, w, h).data;
-        enc.addFrame(rgba);
+        frames.push(ctx.getImageData(0, 0, w, h).data);
         const pct = Math.round(((i + 1) / frameCount) * 100);
         progressBar.style.width = pct + '%';
-        progressLabel.textContent = `Frame ${i + 1} / ${frameCount} (${pct} %)`;
-        // UI atmen lassen
-        await new Promise(r => setTimeout(r, 0));
+        progressLabel.textContent = `Frames erfassen · ${i + 1} / ${frameCount} (${pct} %)`;
+        await uiBreath();
+      }
+
+      // Phase 2: kodieren
+      const baseOpts = { fps, loop: loopChk.checked, dither: ditherChk.checked };
+      let bytes, outW = w, outH = h, colors, sizeNote = '';
+
+      if (modeQuality.checked) {
+        colors = qualityToColors(+qualityRange.value);
+        bytes = await encodeGif(frames, w, h, w, h, { ...baseOpts, maxColors: colors }, 'Kodieren');
+      } else {
+        // Zielgröße: erst Breite senken (quadratische Wirkung), notfalls Farbanzahl halbieren
+        const targetBytes = sizeSliderToBytes(+sizeRange.value);
+        colors = 256;
+        const maxAttempts = 7;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          bytes = await encodeGif(frames, w, h, outW, outH,
+            { ...baseOpts, maxColors: colors }, `Versuch ${attempt}`);
+          if (bytes.length <= targetBytes) break;
+          if (attempt === maxAttempts) {
+            sizeNote = ` · Ziel ${fmtBytes(targetBytes)} nicht ganz erreicht (kleinstmögliche Datei)`;
+            break;
+          }
+          const ratio = targetBytes / bytes.length;
+          if (outW > 48) {
+            let newW = Math.max(48, Math.floor(outW * Math.sqrt(ratio) * 0.97)) & ~1;
+            if (newW >= outW) newW = outW - 2;
+            outH = Math.max(2, Math.round(outH * newW / outW)) & ~1;
+            outW = newW;
+          } else if (colors > 8) {
+            colors = Math.max(8, colors >> 1);
+          } else {
+            sizeNote = ` · Ziel ${fmtBytes(targetBytes)} nicht ganz erreicht (kleinstmögliche Datei)`;
+            break;
+          }
+        }
+        if (!sizeNote) sizeNote = ` · Ziel ≤ ${fmtBytes(targetBytes)} eingehalten`;
       }
 
       progressLabel.textContent = 'GIF wird zusammengebaut …';
-      await new Promise(r => setTimeout(r, 0));
-      const bytes = enc.finish();
+      await uiBreath();
       const blob = new Blob([bytes], { type: 'image/gif' });
 
       if (gifUrl) URL.revokeObjectURL(gifUrl);
@@ -624,7 +734,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = GifEncoder
       gifPreview.src = gifUrl;
       downloadBtn.href = gifUrl;
       resultMeta.textContent =
-        `${w}×${h} px · ${frameCount} Frames · ${fps} FPS · ${fmtBytes(blob.size)}`;
+        `${outW}×${outH} px · ${frameCount} Frames · ${fps} FPS · ${colors} Farben · ${fmtBytes(blob.size)}${sizeNote}`;
       result.style.display = 'block';
       result.scrollIntoView({ behavior: 'smooth' });
     } catch (err) {

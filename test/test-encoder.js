@@ -103,6 +103,26 @@ for (const dither of [true, false]) {
   assert(frameIdx === FRAMES, `Frame-Anzahl (${frameIdx})`);
 }
 
+// maxColors: reduzierte Palette muss eingehalten werden und kleinere Dateien liefern
+{
+  const sizes = {};
+  for (const maxColors of [256, 32, 8]) {
+    const enc = GifEncoder.create(W, H, { fps: 10, dither: false, maxColors });
+    for (const f of frames) enc.addFrame(f);
+    const gif = enc.finish();
+    sizes[maxColors] = gif.length;
+    // Größe der lokalen Farbtabelle des ersten Frames prüfen
+    let pos = 13;
+    while (gif[pos] === 0x21) { pos += 2; while (gif[pos] !== 0) pos += gif[pos] + 1; pos++; }
+    assert(gif[pos] === 0x2c, 'Image Descriptor');
+    const flags = gif[pos + 9];
+    const tableSize = 2 << (flags & 7);
+    assert(tableSize <= Math.max(4, maxColors), `Farbtabelle ${tableSize} > maxColors ${maxColors}`);
+    console.log(`maxColors=${maxColors}: ${gif.length} Bytes, Farbtabelle ${tableSize}`);
+  }
+  assert(sizes[8] < sizes[32] && sizes[32] < sizes[256], 'weniger Farben müssen kleinere Dateien ergeben');
+}
+
 // GIF für manuelle Sichtprüfung speichern
 {
   const enc = GifEncoder.create(W, H, { fps: 10 });

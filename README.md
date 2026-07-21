@@ -9,12 +9,20 @@ Einfach `index.html` im Browser öffnen (Doppelklick genügt, kein Webserver nö
 
 1. Video per Drag & Drop oder Klick auswählen (MP4, WebM, MOV … alles, was der Browser abspielen kann)
 2. Ausschnitt (Start/Ende), FPS, Breite, Dithering und Endlos-Schleife einstellen
-3. „✨ In GIF umwandeln“ klicken
-4. GIF ansehen und herunterladen
+3. Modus wählen:
+   - **Qualität vorgeben** – der Qualitätsslider (10–100 %) steuert die Farbanzahl
+     pro Frame (4–256 Farben)
+   - **Dateigröße begrenzen** – der Größenslider (0,1–10 MB) setzt eine Obergrenze;
+     die App verkleinert dann automatisch schrittweise die Breite (und notfalls die
+     Farbanzahl), bis das GIF unter die Grenze passt
+4. „✨ In GIF umwandeln“ klicken
+5. GIF ansehen und herunterladen
 
 ## Wie es funktioniert
 
-- Frames werden per `<video>`-Seek auf ein Canvas gezeichnet und als RGBA-Daten ausgelesen
+- Frames werden per `<video>`-Seek auf ein Canvas gezeichnet, einmal als RGBA-Daten
+  erfasst und dann kodiert; im Größenmodus werden weitere Kodierversuche aus den
+  gespeicherten Frames heruntergerechnet (kein erneutes Seeking)
 - Ein eingebetteter GIF89a-Encoder (reines JavaScript) übernimmt die Kodierung:
   - **Median-Cut-Quantisierung** auf max. 256 Farben pro Frame (lokale Farbtabellen)
   - optional **Floyd-Steinberg-Dithering** für weichere Farbverläufe
