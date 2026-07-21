@@ -38,6 +38,15 @@ dekodiert sie mit einem strikten Referenz-Decoder zurück):
 node test/test-encoder.js
 ```
 
+## Versionierung
+
+Die App zeigt im Footer eine Versionsnummer (Start: 1.0). Bei jeder
+Aktualisierung wird sie automatisch um 0.1 erhöht:
+
+```bash
+node bump-version.js
+```
+
 ## Tipps
 
 - GIFs werden schnell groß: kurze Ausschnitte (≤ 8 s), 10–15 FPS und ≤ 480 px Breite liefern die besten Ergebnisse
