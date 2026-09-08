@@ -30,6 +30,31 @@ node bump-version.js        # Version +0.1, stempelt index.html-Fußzeile
 `index.html` dem Nutzer direkt als Datei liefern** (nicht nur pushen) –
 GitHub ist im Firmennetz blockiert.
 
+## WICHTIG: Deployment auf den Strato-Webspace
+Die App läuft live unter **`http://lidl.saleskunde.de/giffy/`**
+(HTTPS folgt, sobald das SSL-Zertifikat für die Subdomain aktiv ist).
+
+**Regel (vom Nutzer gewünscht): Jede neue Version zusätzlich dorthin
+deployen.** Ablauf und Fakten:
+
+- Ziel auf dem Webspace: `/LIDL/giffy/index.html` (per SFTP, Port 22).
+  Die Subdomain `lidl.saleskunde.de` ist im Strato-Panel dem Ordner
+  `/LIDL` zugeordnet; `/LIDL/index.html` leitet auf `/giffy/` weiter.
+- Zugangsdaten (Host, Nutzer, Passwort) stehen **nicht** in diesem
+  öffentlichen Repo, sondern in Marcs Dropbox:
+  `/_CLAUDE/WEB_Schmelztiegel.store/tools/.deploy-credentials`
+  (derselbe Strato-Webspace wie emefka.com und schmelztiegel.store).
+- In Claude-Remote-Sessions ist ausgehend nur Port 443 erlaubt – SFTP
+  von dort über eine verbundene Cloud-Sandbox ausführen (z. B.
+  Higgsfield `sandbox_exec`: paramiko installieren, Datei per SFTP
+  hochladen; die aktuelle `index.html` kann die Sandbox direkt von
+  GitHub-Raw laden, das Repo ist öffentlich).
+- Nach dem Upload die Live-URL testen (Inhalt muss „LIDL GIFFY“ und die
+  neue Versionsnummer enthalten).
+- SSL/Subdomain-Einstellungen gehen nur über den Strato-Kundenlogin
+  (Kundennummer 74025894) – dessen Passwort ist nirgends hinterlegt,
+  solche Schritte macht Marc selbst.
+
 ## Design-Konventionen (vom MCO Now Konverter übernommen)
 - Lidl-Farben: Blau `#0050aa`, Gelb `#fff000`, Rot `#e60a14`
 - Header: blauer Verlauf, gelbe Unterkante, Rauten-Motiv, rotes

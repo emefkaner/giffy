@@ -5,7 +5,7 @@ Eine One-Page-HTML-App im Lidl-Design (Look & Feel wie MCO Now Konverter und InS
 
 ## Benutzung
 
-Einfach `index.html` im Browser öffnen (Doppelklick genügt, kein Webserver nötig):
+Live unter `http://lidl.saleskunde.de/giffy/` – oder einfach `index.html` lokal im Browser öffnen (Doppelklick genügt, kein Webserver nötig):
 
 1. Video per Drag & Drop oder Klick auswählen (MP4, WebM, MOV … alles, was der Browser abspielen kann)
 2. Ausschnitt (Start/Ende), FPS, Breite, Dithering und Endlos-Schleife einstellen
